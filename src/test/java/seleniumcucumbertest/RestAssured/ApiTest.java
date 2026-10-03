@@ -1,55 +1,66 @@
 package seleniumcucumbertest.RestAssured;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.Callable;
 
 import org.testng.annotations.Listeners;
 import org.testng.annotations.Test;
 
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
+import Util.ApiDataProvider;
+import Util.ApiRetry;
 import Util.TestListener;
+import Util.UserData;
 import io.restassured.module.jsv.JsonSchemaValidator;
+import static org.hamcrest.Matchers.equalTo;
 
 @Listeners(TestListener.class)
 public class ApiTest {
+
 	
-	@Test
-	public void postApi()
-	{	
-		File jsonFIle = new File("src/main/resources/testdata.json");
-//		String jsonBody = "src/test/resources/testdata.json";
-		
-//		Map<String, Object> payload = new HashMap<>();
-//		payload.put("name", "JohnDoe");
-//		payload.put("job", "QA Engineer");
-		Response response = RestAssured.given()
-				.spec(SpecFactory.getRequestSpecification("token123"))
-				.body(jsonFIle)
-				.when()
-				.post("/users");
+	@Test(dataProvider = "userData", dataProviderClass = ApiDataProvider.class)
 			
-				response.then()
-				.spec(SpecFactory.getResponseSpecification(201));
-				String id = response.jsonPath().getString("id");
-				response.then().body(JsonSchemaValidator.matchesJsonSchemaInClasspath("user-schema.json"));
+	public void postApi(UserData user) throws Exception {	
+		final File jsonFile = new File("src/main/resources/testdata.json");
 
-	}
-	@Test
-	public void getApi()
-	{	
-		
-		Map<String, Object> payload = new HashMap<>();
+		Response response = ApiRetry.execute(new Callable<Response>() {
+			@Override
+			public Response call() {
+				return RestAssured.given()
+						.spec(SpecFactory.getRequestSpecification("token123"))
+						.body(user)
+						.when()
+						.post("/users");
+			}
+		});
 
-		Response response = RestAssured.given()
-				.spec(SpecFactory.getRequestSpecification("token123"))
-				.pathParam("id", "2")
-				.when()
-				.get("/users/{id}");
+		response.then()
+				.spec(SpecFactory.getResponseSpecification(201))
+				.body(JsonSchemaValidator.matchesJsonSchemaInClasspath("user-schema.json"))
+				.body("name", equalTo(user.getName()))
+				.body("name", equalTo(user.getName()));
+
+		System.out.println("Response time: " + response.time() + " ms");
 				
-				response.then()
-				.spec(SpecFactory.getResponseSpecification(200));
 	}
 
+	@Test
+	public void getApi() throws Exception {	
+		Response response = ApiRetry.execute(new Callable<Response>() {
+			@Override
+			public Response call() {
+				return RestAssured.given()
+						.spec(SpecFactory.getRequestSpecification("token123"))
+						.pathParam("id", "2")
+						.when()
+						.get("/users/{id}");
+			}
+		});
+
+		response.then()
+				.spec(SpecFactory.getResponseSpecification(200));
+		System.out.println("Response time: " + response.time() + " ms");
+
+	}
 }
